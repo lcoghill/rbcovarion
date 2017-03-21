@@ -8,4 +8,6 @@ This repo will be updated more regularly, and broken more often. Once a stable c
 
 ### Scripts
 
-1. [unrooted_Covarion_with_GTR.Rev](https://github.com/lcoghill/rbcovarion/blob/master/unrooted_Covarion_with_GTR.Rev) - This script is an attempt at implementing the same version of the covarion implemented in MrBayes in the RevScript / RevBayes framework. 
+1. [unrooted_Covarion_GTR_IG_MCMC.Rev](https://github.com/lcoghill/rbcovarion/blob/master/unrooted_Covarion_GTR_IG_MCMC.Rev) - This script is an attempt at implementing the same version of the covarion implemented in MrBayes in the RevScript / RevBayes framework running a standard MCMC analysis. 
+
+2. [unrooted_Covarion_GTR_IG_SS.Rev](https://github.com/lcoghill/rbcovarion/blob/master/unrooted_Covarion_GTR_IG_SS.Rev) - This script is an attempt at implementing the same version of the covarion implemented in MrBayes in the RevScript / RevBayes framework running a stepping stone analysis. 
