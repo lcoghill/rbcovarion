@@ -1,0 +1,157 @@
+######################################################################################
+#
+# RevBayes Example: Covarion Substitution Model with Unrooted Tree on a single gene.
+#
+# authors: Lyndon M. Coghill, Sebastian Hoehna, & Jeremy M. Brown
+#
+######################################################################################
+
+#######################
+# Reading in the Data #
+#######################
+
+###### This just defines a single model for all sites #######
+
+### Read in sequence data for both genes
+
+data <- readDiscreteCharacterData("data/primates_cytb.nex")
+
+# Get some useful variables from the data. We need these later on.
+n_species <- data.ntaxa()
+n_branches <- 2 * n_species - 3
+taxa <- data.taxa()
+
+# set my move index
+mvi = 0
+mni = 0
+
+
+
+######################
+# Substitution Model #
+######################
+
+#### specify the GTR+G substitution model applied uniformly to all sites ###
+er_prior <- v(1,1,1,1,1,1)
+er ~ dnDirichlet(er_prior)
+moves[++mvi] = mvSimplexElementScale(er,weight=3)
+
+
+pi_prior <- v(1,1,1,1) 
+pi ~ dnDirichlet(pi_prior)
+moves[++mvi] = mvSimplexElementScale(pi,weight=2)
+
+
+######################
+# Setup the Covarion #
+######################
+
+#### create a deterministic variable for the rate matrix ####
+Q := fnGTR(er,pi) 
+
+# Set our RateScalar. The entire RateMatrix will be multiplied by these values for each SwitchRate Category. 
+# To set it to On/Off we set one RateScalar to 0 and one to 1. 
+rs = [0.0, 1.0]
+## needed to switch from a Probablity type to a RealPos because.... RevBayes.
+rs = rs + 0.0
+
+## Setting our SwitchRate values. This should be a Uniform distribution between 0, 1.0.
+## Using the default 1 - 100 in MrBayes causes some numerical issues.
+sr1 ~ dnUniform(0, 1.0)
+sr2 ~ dnUniform(0, 1.0)
+sr := [ rep(sr1,4), rep(sr2,4)]
+
+# Actually building the Q Matrix
+QC := fnCovarion([Q,Q], rs, sr, false)
+
+
+#############################
+# Among Site Rate Variation #
+#############################
+
+alpha_prior_mean <- ln(2.0)
+alpha_prior_sd <- 0.587405
+alpha ~ dnLognormal( alpha_prior_mean, alpha_prior_sd )
+gamma_rates := fnDiscretizeGamma( alpha, alpha, 4, false )
+
+# add moves for the stationary frequencies, exchangeability rates and the shape parameter
+moves[++mvi] = mvScale(alpha,weight=2)
+
+
+pinvar ~ dnBeta(1,1)
+moves[++mvi] = mvSlide(pinvar)
+
+
+##############
+# Tree model #
+##############
+
+#### This for an unrooted tree
+
+#### Specify a uniform prior on the tree topology #### 
+topology ~ dnUniformTopology(taxa)
+
+# moves on the tree
+moves[++mvi] = mvNNI(topology)
+moves[++mvi] = mvSPR(topology)
+
+
+#### Specify a prior and moves on the branch lengths #### 
+# create a random variable for each branch length using a for loop
+for (i in 1:n_branches) {
+  # We use here the exponential distribution with rate 1.0 as the branch length prior
+  br_lens[i] ~ dnExponential(10.0)
+  
+  # Add a move for the branch length. We just take a simple scaling move since the value is a positive real number.
+  moves[++mvi] = mvScale(br_lens[i]) 
+}
+
+TL := sum(br_lens)
+
+# Build the tree by combining the topology with the branch length.
+psi := treeAssembly(topology, br_lens)
+
+
+
+###################
+# PhyloCTMC Model #
+###################
+
+# the sequence evolution model
+seq ~ dnPhyloCTMC(tree=psi, Q=QC, siteRates=gamma_rates, pInv=pinvar, type="NaturalNumbers")
+
+# expand and attach the data
+data_exp <- data.expandCharacters( 2 )
+seq.clamp(data_exp)
+
+
+
+
+#############
+# THE Model #
+#############
+
+# We define our model.
+# We can use any node of our model as a handle, here we chose to use the rate matrix.
+mymodel = model(QC)
+
+
+monitors[++mni] = mnModel(filename="output/primates_cytb.log",printgen=10, separator = TAB)
+monitors[++mni] = mnFile(filename="output/primates_cytb.trees",printgen=10, separator = TAB, psi)
+
+
+### Compute power posterior distributions
+pow_p = powerPosterior(mymodel, moves, monitors, "output/primates_cytb.out", cats=127, sampleFreq=10) 
+pow_p.burnin(generations=1000,tuningInterval=10)
+pow_p.run(generations=10000)  
+
+### Use stepping-stone sampling to calculate marginal likelihoods
+ss = steppingStoneSampler(file="output/primates_cytb.out", powerColumnName="power", likelihoodColumnName="likelihood")
+ss.marginal() 
+
+### Use path-sampling to calculate marginal likelihoods
+ps = pathSampler(file="output/primates_cytb.out", powerColumnName="power", likelihoodColumnName="likelihood")
+ps.marginal() 
+
+# you may want to quit RevBayes now
+q()
